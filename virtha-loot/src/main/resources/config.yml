@@ -1,0 +1,30 @@
+# Configuración principal de VirthaLoot
+
+# Configuración general
+settings:
+  # Mensaje que se muestra cuando un jugador abre un cofre de loot
+  loot-message: "&a¡Has abierto un cofre de loot!"
+  # Mensaje que se muestra cuando un jugador está en cooldown
+  cooldown-message: "&cDebes esperar &e%time_left% segundos &cpara volver a abrir este cofre."
+  # Sonido que se reproduce al abrir un cofre de loot (ENTITY_PLAYER_LEVELUP, BLOCK_CHEST_OPEN, etc.)
+  loot-sound: "ENTITY_PLAYER_LEVELUP"
+  # Volumen del sonido (0.0 - 1.0)
+  sound-volume: 1.0
+  # Tono del sonido (0.5 - 2.0)
+  sound-pitch: 1.0
+
+# Configuración de placeholders
+placeholders:
+  # Formato de tiempo para mostrar en los placeholders
+  time-format: "HH:mm:ss"
+  # Placeholder para cuando un cofre está disponible
+  available-text: "&aDisponible"
+  # Placeholder para cuando un cofre está en cooldown
+  cooldown-text: "&c%time_left%s"
+
+# Configuración de debug
+debug:
+  # Activar mensajes de debug
+  enabled: false
+  # Nivel de detalle de los mensajes de debug (1-3)
+  level: 1

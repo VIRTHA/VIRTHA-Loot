@@ -1,0 +1,28 @@
+name: VirthaLoot
+version: 1.0
+main: com.virtha.VirthaLootPlugin
+api-version: 1.19
+authors: [Virtha]
+description: Plugin de cofres con loot personalizable y sistema de cooldown
+softdepend: [PlaceholderAPI]
+
+commands:
+  virthaloot:
+    description: Comando principal del plugin VirthaLoot
+    usage: /virthaloot <subcomando>
+    aliases: [vloot]
+    permission: virthaloot.admin
+
+permissions:
+  virthaloot.admin:
+    description: Permite usar todos los comandos administrativos
+    default: op
+  virthaloot.create:
+    description: Permite crear cofres de loot
+    default: op
+  virthaloot.edit:
+    description: Permite editar cofres de loot
+    default: op
+  virthaloot.use:
+    description: Permite usar cofres de loot
+    default: true
