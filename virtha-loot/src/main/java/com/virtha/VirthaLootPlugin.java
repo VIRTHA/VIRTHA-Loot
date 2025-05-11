@@ -17,6 +17,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -32,6 +33,7 @@ public class VirthaLootPlugin extends JavaPlugin implements Listener {
     private File cooldownsFile;
     private FileConfiguration cooldownsConfig;
     private LootManager lootManager;
+    private LootChestEditor lootChestEditor;
     
     // Mapa para almacenar los cooldowns de los jugadores para cada cofre
     private final Map<String, Map<UUID, Long>> chestCooldowns = new ConcurrentHashMap<>();
@@ -76,6 +78,9 @@ public class VirthaLootPlugin extends JavaPlugin implements Listener {
         
         // Inicializar el gestor de loot
         lootManager = new LootManager(this);
+        
+        // Inicializar el editor de cofres de loot
+        lootChestEditor = new LootChestEditor(this);
         
         // Verificar si PlaceholderAPI está presente
         if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
@@ -230,6 +235,49 @@ public class VirthaLootPlugin extends JavaPlugin implements Listener {
                 deleteLootChest(player, args[1]);
                 return true;
                 
+            case "chance":
+                if (!player.hasPermission("virthaloot.edit")) {
+                    player.sendMessage("§cNo tienes permiso para usar este comando.");
+                    return true;
+                }
+                if (args.length < 2) {
+                    player.sendMessage("§cUso: /vloot chance <probabilidad>");
+                    return true;
+                }
+                try {
+                    double chance = Double.parseDouble(args[1]);
+                    if (chance < 0 || chance > 100) {
+                        player.sendMessage("§cLa probabilidad debe estar entre 0 y 100.");
+                        return true;
+                    }
+                    setItemChance(player, chance);
+                } catch (NumberFormatException e) {
+                    player.sendMessage("§cLa probabilidad debe ser un número válido.");
+                }
+                return true;
+                
+            case "cooldown":
+                if (!player.hasPermission("virthaloot.edit")) {
+                    player.sendMessage("§cNo tienes permiso para usar este comando.");
+                    return true;
+                }
+                if (args.length < 3) {
+                    player.sendMessage("§cUso: /vloot cooldown <nombre> <segundos>");
+                    return true;
+                }
+                try {
+                    String chestName = args[1];
+                    int cooldown = Integer.parseInt(args[2]);
+                    if (cooldown < 0) {
+                        player.sendMessage("§cEl cooldown no puede ser negativo.");
+                        return true;
+                    }
+                    setChestCooldown(player, chestName, cooldown);
+                } catch (NumberFormatException e) {
+                    player.sendMessage("§cEl cooldown debe ser un número entero válido.");
+                }
+                return true;
+                
             default:
                 sendHelpMessage(player);
                 return true;
@@ -243,6 +291,75 @@ public class VirthaLootPlugin extends JavaPlugin implements Listener {
         player.sendMessage("§e/vloot info <nombre> §7- Muestra información sobre un cofre de loot");
         player.sendMessage("§e/vloot list §7- Lista todos los cofres de loot disponibles");
         player.sendMessage("§e/vloot delete <nombre> §7- Elimina un cofre de loot");
+        player.sendMessage("§e/vloot chance <probabilidad> §7- Configura la probabilidad del item seleccionado");
+        player.sendMessage("§e/vloot cooldown <nombre> <segundos> §7- Modifica el cooldown de un cofre");
+    }
+    
+    /**
+     * Configura la probabilidad de aparición del item que el jugador tiene en la mano
+     * @param player Jugador que está configurando la probabilidad
+     * @param chance Probabilidad de aparición (0-100)
+     */
+    private void setItemChance(Player player, double chance) {
+        ItemStack item = player.getInventory().getItemInMainHand();
+        
+        if (item == null || item.getType() == Material.AIR) {
+            player.sendMessage("§cDebes tener un item en la mano para configurar su probabilidad.");
+            return;
+        }
+        
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) {
+            player.sendMessage("§cEste item no puede tener metadatos.");
+            return;
+        }
+        
+        // Crear o actualizar el lore con la información de probabilidad
+        List<String> lore = meta.hasLore() ? meta.getLore() : new ArrayList<>();
+        
+        // Si ya existe una línea de probabilidad, actualizarla
+        boolean foundChanceLine = false;
+        if (lore != null) {
+            for (int i = 0; i < lore.size(); i++) {
+                if (lore.get(i).startsWith("§eProbabilidad: §f")) {
+                    lore.set(i, "§eProbabilidad: §f" + chance + "%");
+                    foundChanceLine = true;
+                    break;
+                }
+            }
+        } else {
+            lore = new ArrayList<>();
+        }
+        
+        // Si no existe, añadir al principio
+        if (!foundChanceLine) {
+            lore.add(0, "§eProbabilidad: §f" + chance + "%");
+        }
+        
+        meta.setLore(lore);
+        item.setItemMeta(meta);
+        
+        player.sendMessage("§aProbabilidad del item configurada a §f" + chance + "%§a.");
+    }
+    
+    /**
+     * Configura el cooldown de un cofre de loot
+     * @param player Jugador que está configurando el cooldown
+     * @param chestName Nombre del cofre
+     * @param cooldown Tiempo de cooldown en segundos
+     */
+    private void setChestCooldown(Player player, String chestName, int cooldown) {
+        // Verificar si existe el cofre
+        if (!lootChestsConfig.contains("chests." + chestName)) {
+            player.sendMessage("§cNo existe ningún cofre de loot con ese nombre.");
+            return;
+        }
+        
+        // Actualizar el cooldown
+        lootChestsConfig.set("chests." + chestName + ".cooldown", cooldown);
+        saveLootChestsConfig();
+        
+        player.sendMessage("§aCooldown del cofre '" + chestName + "' actualizado a §f" + cooldown + " segundos§a.");
     }
     
     private void createLootChest(Player player, String name, int cooldownSeconds) {
@@ -277,10 +394,13 @@ public class VirthaLootPlugin extends JavaPlugin implements Listener {
             return;
         }
         
-        // Aquí se implementaría la lógica para editar el contenido del cofre
-        // Por simplicidad, solo mostraremos un mensaje
+        // Abrir el editor de cofres de loot
+        if (lootChestEditor == null) {
+            lootChestEditor = new LootChestEditor(this);
+        }
+        
+        lootChestEditor.openEditor(player, name);
         player.sendMessage("§aAbriendo editor de cofre de loot '" + name + "'...");
-        player.sendMessage("§7(Esta funcionalidad requeriría una implementación de GUI más compleja)");
     }
     
     private void showChestInfo(Player player, String name) {
