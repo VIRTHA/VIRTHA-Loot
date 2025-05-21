@@ -35,6 +35,10 @@ public class LootChestEditor implements Listener {
     private static final String ENCHANT_MENU_TITLE = "§5Añadir Encantamientos";
     private static final String PREVIEW_MENU_TITLE = "§bVista Previa del Loot";
     private static final String CHANCE_MENU_TITLE = "§eConfigurar Probabilidad";
+    private static final String PROBABILITIES_PANEL_TITLE = "§ePanel de Probabilidades";
+    private static final String COMMAND_MENU_TITLE = "§dConfigurar Comando";
+    private static final String COMMAND_ITEM_MENU_TITLE = "§dConfigurar Comando como Item";
+    private static final String COMMAND_ITEM_EDIT_TITLE = "§dEditar Comando como Item";
     
     // Variable para almacenar el slot seleccionado
     private final Map<UUID, Integer> selectedSlot;
@@ -46,7 +50,11 @@ public class LootChestEditor implements Listener {
         CONFIG_EDIT,
         ENCHANT_EDIT,
         PREVIEW_LOOT,
-        CHANCE_EDIT
+        CHANCE_EDIT,
+        PROBABILITIES_PANEL,
+        COMMAND_EDIT,
+        COMMAND_ITEM_EDIT,
+        COMMAND_ITEM_CHANCE_EDIT
     }
     
     /**
@@ -189,14 +197,26 @@ public class LootChestEditor implements Listener {
         inventory.setItem(49, saveButton);
         
         // Botón para configurar probabilidad del item seleccionado
+        @SuppressWarnings("unused")
         ItemStack chanceButton = createGuiItem(Material.PAPER, "§e§lConfigurar Probabilidad", 
                 "§7Haz clic para configurar la probabilidad", "§7del item seleccionado");
-        inventory.setItem(52, chanceButton);
+        
+        //inventory.setItem(52, chanceButton);
+        
+        // Botón para abrir el panel de probabilidades
+        ItemStack probabilitiesButton = createGuiItem(Material.HOPPER, "§e§lPanel de Probabilidades", 
+                "§7Haz clic para ver y configurar", "§7las probabilidades de todos los items");
+        inventory.setItem(51, probabilitiesButton);
         
         // Botón para añadir encantamientos
         ItemStack enchantButton = createGuiItem(Material.ENCHANTED_BOOK, "§5§lAñadir Encantamientos", 
                 "§7Haz clic para añadir encantamientos", "§7al item seleccionado");
         inventory.setItem(53, enchantButton);
+        
+        // Botón para añadir comando como item
+        ItemStack commandItemButton = createGuiItem(Material.COMMAND_BLOCK, "§d§lAñadir Comando", 
+                "§7Haz clic para añadir un comando", "§7como item con probabilidad");
+        inventory.setItem(47, commandItemButton);
         
         player.openInventory(inventory);
     }
@@ -213,15 +233,181 @@ public class LootChestEditor implements Listener {
         
         // Obtener configuración actual
         int cooldown = plugin.getLootChestsConfig().getInt("chests." + chestName + ".cooldown");
+        String command = plugin.getLootChestsConfig().getString("chests." + chestName + ".command", "");
         
         // Item para mostrar y editar el cooldown
         ItemStack cooldownItem = createGuiItem(Material.CLOCK, "§e§lCooldown: §f" + cooldown + " segundos", 
                 "§7Haz clic para modificar el tiempo de espera", "§7entre aperturas del cofre");
-        inventory.setItem(13, cooldownItem);
+        inventory.setItem(11, cooldownItem);
+        
+        // Item para mostrar y editar el comando
+        ItemStack commandItem = createGuiItem(Material.COMMAND_BLOCK, "§d§lComando: §f" + (command.isEmpty() ? "No configurado" : command), 
+                "§7Haz clic para configurar un comando", "§7que se ejecutará al abrir el cofre", 
+                "§7Usa %player_name% para el nombre del jugador");
+        inventory.setItem(15, commandItem);
         
         // Botón para volver al menú principal
         ItemStack backButton = createGuiItem(Material.ARROW, "§7§lVolver", 
                 "§7Volver al menú principal");
+        inventory.setItem(18, backButton);
+        
+        // Botón para guardar cambios
+        ItemStack saveButton = createGuiItem(Material.EMERALD, "§a§lGuardar Cambios", 
+                "§7Guarda los cambios realizados");
+        inventory.setItem(26, saveButton);
+        
+        player.openInventory(inventory);
+    }
+    
+    /**
+     * Abre el menú para configurar el comando personalizado del cofre
+     * @param player Jugador que verá el menú
+     */
+    private void openCommandMenu(Player player) {
+        playerMode.put(player.getUniqueId(), EditorMode.COMMAND_EDIT);
+        String chestName = playerEditing.get(player.getUniqueId());
+        
+        Inventory inventory = Bukkit.createInventory(null, 27, COMMAND_MENU_TITLE + ": " + chestName);
+        
+        // Obtener comando actual
+        String currentCommand = plugin.getLootChestsConfig().getString("chests." + chestName + ".command", "");
+        
+        // Item para mostrar el comando actual
+        ItemStack commandItem = createGuiItem(Material.COMMAND_BLOCK, "§d§lComando Actual:", 
+                "§f" + (currentCommand.isEmpty() ? "No configurado" : currentCommand),
+                "",
+                "§7Ejemplos de comandos:",
+                "§7- give %player_name% diamond 1",
+                "§7- effect give %player_name% speed 30 1");
+        inventory.setItem(13, commandItem);
+        
+        // Item informativo sobre placeholders
+        ItemStack infoItem = createGuiItem(Material.BOOK, "§e§lInformación", 
+                "§7Puedes usar los siguientes placeholders:",
+                "§7- %player_name%: Nombre del jugador");
+        inventory.setItem(11, infoItem);
+        
+        // Botón para editar el comando
+        ItemStack editButton = createGuiItem(Material.WRITABLE_BOOK, "§a§lEditar Comando", 
+                "§7Haz clic para configurar el comando",
+                "§7que se ejecutará al abrir el cofre");
+        inventory.setItem(15, editButton);
+        
+        // Botón para volver al menú de configuración
+        ItemStack backButton = createGuiItem(Material.ARROW, "§7§lVolver", 
+                "§7Volver al menú de configuración");
+        inventory.setItem(18, backButton);
+        
+        // Botón para guardar comando
+        ItemStack saveButton = createGuiItem(Material.EMERALD, "§a§lGuardar Comando", 
+                "§7Guarda el comando configurado");
+        inventory.setItem(26, saveButton);
+        
+        player.openInventory(inventory);
+    }
+    
+    /**
+     * Abre el menú para configurar un comando como item con probabilidad
+     * @param player Jugador que verá el menú
+     */
+    private void openCommandItemMenu(Player player) {
+        playerMode.put(player.getUniqueId(), EditorMode.COMMAND_ITEM_EDIT);
+        String chestName = playerEditing.get(player.getUniqueId());
+        
+        Inventory inventory = Bukkit.createInventory(null, 27, COMMAND_ITEM_MENU_TITLE + ": " + chestName);
+        
+        // Item para ingresar el comando
+        ItemStack commandItem = createGuiItem(Material.COMMAND_BLOCK, "§d§lComando a Configurar", 
+                "§7Haz clic para configurar el comando",
+                "§7que se ejecutará al abrir el cofre",
+                "",
+                "§7Ejemplos de comandos:",
+                "§7- give %player_name% diamond 1",
+                "§7- effect give %player_name% speed 30 1");
+        inventory.setItem(13, commandItem);
+        
+        // Item informativo sobre placeholders
+        ItemStack infoItem = createGuiItem(Material.BOOK, "§e§lInformación", 
+                "§7Puedes usar los siguientes placeholders:",
+                "§7- %player_name%: Nombre del jugador",
+                "",
+                "§7Este comando se añadirá como un item",
+                "§7con probabilidad configurable");
+        inventory.setItem(11, infoItem);
+        
+        // Botón para configurar probabilidad
+        ItemStack chanceButton = createGuiItem(Material.PAPER, "§e§lConfigurar Probabilidad", 
+                "§7Haz clic para configurar la probabilidad",
+                "§7de ejecución del comando");
+        inventory.setItem(15, chanceButton);
+        
+        // Botón para volver al menú de edición de items
+        ItemStack backButton = createGuiItem(Material.ARROW, "§7§lVolver", 
+                "§7Volver al menú de edición de items");
+        inventory.setItem(18, backButton);
+        
+        // Botón para guardar comando como item
+        ItemStack saveButton = createGuiItem(Material.EMERALD, "§a§lGuardar Comando", 
+                "§7Guarda el comando como item");
+        inventory.setItem(26, saveButton);
+        
+        player.openInventory(inventory);
+    }
+    
+    /**
+     * Abre el menú para editar un comando existente como item
+     * @param player Jugador que verá el menú
+     * @param commandItem Item de comando a editar
+     * @param slot Slot del item en el inventario
+     */
+    private void openCommandItemEditMenu(Player player, ItemStack commandItem, int slot) {
+        playerMode.put(player.getUniqueId(), EditorMode.COMMAND_ITEM_EDIT);
+        selectedSlot.put(player.getUniqueId(), slot);
+        String chestName = playerEditing.get(player.getUniqueId());
+        
+        Inventory inventory = Bukkit.createInventory(null, 27, COMMAND_ITEM_EDIT_TITLE + ": " + chestName);
+        
+        // Mostrar el item de comando actual
+        inventory.setItem(4, commandItem.clone());
+        
+        // Extraer el comando del lore
+        String command = "";
+        double chance = 100.0;
+        ItemMeta meta = commandItem.getItemMeta();
+        if (meta != null && meta.hasLore() && meta.getLore() != null) {
+            List<String> lore = meta.getLore();
+            for (String line : lore) {
+                if (line.startsWith("§7Comando: §f")) {
+                    command = line.substring("§7Comando: §f".length());
+                } else if (line.startsWith("§eProbabilidad: §f")) {
+                    String chanceStr = line.replace("§eProbabilidad: §f", "").replace("%", "");
+                    try {
+                        chance = Double.parseDouble(chanceStr);
+                    } catch (NumberFormatException e) {
+                        plugin.getLogger().warning("Error al parsear probabilidad: " + chanceStr);
+                    }
+                }
+            }
+        }
+        
+        // Item para editar el comando
+        ItemStack editCommandItem = createGuiItem(Material.WRITABLE_BOOK, "§d§lEditar Comando", 
+                "§7Comando actual: §f" + command,
+                "",
+                "§7Haz clic para editar el comando");
+        inventory.setItem(11, editCommandItem);
+        
+        // Botón para configurar probabilidad
+        ItemStack chanceButton = createGuiItem(Material.PAPER, "§e§lConfigurar Probabilidad", 
+                "§7Probabilidad actual: §f" + chance + "%",
+                "",
+                "§7Haz clic para configurar la probabilidad",
+                "§7de ejecución del comando");
+        inventory.setItem(15, chanceButton);
+        
+        // Botón para volver al menú de edición de items
+        ItemStack backButton = createGuiItem(Material.ARROW, "§7§lVolver", 
+                "§7Volver al menú de edición de items");
         inventory.setItem(18, backButton);
         
         // Botón para guardar cambios
@@ -240,6 +426,7 @@ public class LootChestEditor implements Listener {
     private void saveItemsFromInventory(Player player, Inventory inventory) {
         String chestName = playerEditing.get(player.getUniqueId());
         List<Map<String, Object>> itemsList = new ArrayList<>();
+        List<Map<String, Object>> commandsList = new ArrayList<>();
         
         // Recorrer los primeros 45 slots (los últimos 9 son para botones)
         for (int i = 0; i < 45; i++) {
@@ -247,64 +434,100 @@ public class LootChestEditor implements Listener {
             if (item != null && item.getType() != Material.AIR) {
                 Map<String, Object> itemMap = new HashMap<>();
                 
-                // Guardar propiedades básicas
-                itemMap.put("material", item.getType().toString());
-                itemMap.put("amount", item.getAmount());
+                // Verificar si es un item de comando
+                boolean isCommandItem = false;
+                String command = "";
+                double chance = 100.0; // Probabilidad por defecto
                 
-                // Extraer probabilidad del lore
+                // Extraer información del lore
                 ItemMeta meta = item.getItemMeta();
-                if (meta != null) {
-                    // Guardar nombre personalizado si existe
-                    if (meta.hasDisplayName()) {
-                        itemMap.put("name", meta.getDisplayName());
-                    }
+                if (meta != null && meta.hasLore() && meta.getLore() != null) {
+                    List<String> lore = meta.getLore();
                     
-                    // Procesar lore
-                    if (meta.hasLore() && meta.getLore() != null) {
-                        List<String> lore = meta.getLore();
-                        double chance = 100.0; // Probabilidad por defecto
-                        
-                        // Extraer probabilidad del primer elemento del lore
-                        if (!lore.isEmpty() && lore.get(0).startsWith("§eProbabilidad: §f")) {
-                            String chanceStr = lore.get(0).replace("§eProbabilidad: §f", "").replace("%", "");
+                    // Buscar si es un comando
+                    for (String line : lore) {
+                        if (line.startsWith("§7Comando: §f")) {
+                            isCommandItem = true;
+                            command = line.substring("§7Comando: §f".length());
+                        } else if (line.startsWith("§eProbabilidad: §f")) {
+                            String chanceStr = line.replace("§eProbabilidad: §f", "").replace("%", "");
                             try {
                                 chance = Double.parseDouble(chanceStr);
                             } catch (NumberFormatException e) {
                                 plugin.getLogger().warning("Error al parsear probabilidad: " + chanceStr);
                             }
-                            
-                            // Crear nuevo lore sin la línea de probabilidad
-                            List<String> customLore = new ArrayList<>();
-                            for (int j = 1; j < lore.size(); j++) {
-                                customLore.add(lore.get(j));
-                            }
-                            
-                            if (!customLore.isEmpty()) {
-                                itemMap.put("lore", customLore);
-                            }
-                        } else {
-                            // Si no tiene formato de probabilidad, guardar todo el lore
-                            itemMap.put("lore", lore);
                         }
-                        
-                        itemMap.put("chance", chance);
-                    } else {
-                        // Si no tiene lore, asignar probabilidad por defecto
-                        itemMap.put("chance", 100.0);
                     }
                 }
                 
-                itemsList.add(itemMap);
+                if (isCommandItem && !command.isEmpty()) {
+                    // Guardar comando con su probabilidad
+                    Map<String, Object> commandMap = new HashMap<>();
+                    commandMap.put("command", command);
+                    commandMap.put("chance", chance);
+                    commandsList.add(commandMap);
+                } else {
+                    // Guardar propiedades básicas del item normal
+                    itemMap.put("material", item.getType().toString());
+                    itemMap.put("amount", item.getAmount());
+                    
+                    // Procesar meta del item normal
+                    if (meta != null) {
+                        // Guardar nombre personalizado si existe
+                        if (meta.hasDisplayName()) {
+                            itemMap.put("name", meta.getDisplayName());
+                        }
+                        
+                        // Procesar lore
+                        if (meta.hasLore() && meta.getLore() != null) {
+                            List<String> lore = meta.getLore();
+                            
+                            // Extraer probabilidad del primer elemento del lore
+                            if (!lore.isEmpty() && lore.get(0).startsWith("§eProbabilidad: §f")) {
+                                String chanceStr = lore.get(0).replace("§eProbabilidad: §f", "").replace("%", "");
+                                try {
+                                    chance = Double.parseDouble(chanceStr);
+                                } catch (NumberFormatException e) {
+                                    plugin.getLogger().warning("Error al parsear probabilidad: " + chanceStr);
+                                }
+                                
+                                // Crear nuevo lore sin la línea de probabilidad
+                                List<String> customLore = new ArrayList<>();
+                                for (int j = 1; j < lore.size(); j++) {
+                                    customLore.add(lore.get(j));
+                                }
+                                
+                                if (!customLore.isEmpty()) {
+                                    itemMap.put("lore", customLore);
+                                }
+                            } else {
+                                // Si no tiene formato de probabilidad, guardar todo el lore
+                                itemMap.put("lore", lore);
+                            }
+                            
+                            itemMap.put("chance", chance);
+                        } else {
+                            // Si no tiene lore, asignar probabilidad por defecto
+                            itemMap.put("chance", 100.0);
+                        }
+                    }
+                    
+                    itemsList.add(itemMap);
+                }
             }
         }
         
         // Guardar la lista de items en la configuración
         plugin.getLootChestsConfig().set("chests." + chestName + ".items", itemsList);
+        
+        // Guardar la lista de comandos en la configuración
+        plugin.getLootChestsConfig().set("chests." + chestName + ".commands", commandsList);
+        
         try {
             plugin.getLootChestsConfig().save(plugin.getDataFolder() + "/lootchests.yml");
-            player.sendMessage("§aItems del cofre guardados correctamente.");
+            player.sendMessage("§aItems y comandos del cofre guardados correctamente.");
         } catch (Exception e) {
-            player.sendMessage("§cError al guardar los items del cofre.");
+            player.sendMessage("§cError al guardar los items y comandos del cofre.");
             plugin.getLogger().severe("Error al guardar lootchests.yml: " + e.getMessage());
         }
     }
@@ -334,6 +557,14 @@ public class LootChestEditor implements Listener {
     /**
      * Maneja los clics en el inventario
      */
+    /**
+     * Actualiza la visualización de la probabilidad en el menú
+     * @param inventory Inventario a actualizar
+     * @param chance Probabilidad a mostrar
+     */
+    // Mapa para almacenar la probabilidad actual por jugador
+    private final Map<UUID, Double> currentChanceByPlayer = new HashMap<>();
+    
     /**
      * Actualiza la visualización de la probabilidad en el menú
      * @param inventory Inventario a actualizar
@@ -402,6 +633,9 @@ public class LootChestEditor implements Listener {
             }
         }
         
+        // Guardar la probabilidad inicial en el mapa
+        currentChanceByPlayer.put(player.getUniqueId(), currentChance);
+        
         // Actualizar la visualización de la probabilidad
         updateChanceDisplay(inventory, currentChance);
         
@@ -462,6 +696,84 @@ public class LootChestEditor implements Listener {
     
     
     /**
+     * Abre el panel de probabilidades que muestra todos los items configurados como recompensa
+     * @param player Jugador que verá el panel
+     */
+    private void openProbabilitiesPanel(Player player) {
+        playerMode.put(player.getUniqueId(), EditorMode.PROBABILITIES_PANEL);
+        String chestName = playerEditing.get(player.getUniqueId());
+        
+        Inventory inventory = Bukkit.createInventory(null, 54, PROBABILITIES_PANEL_TITLE + ": " + chestName);
+        
+        // Cargar items existentes
+        List<Map<?, ?>> itemsList = plugin.getLootChestsConfig().getMapList("chests." + chestName + ".items");
+        int slot = 0;
+        
+        for (Map<?, ?> itemMap : itemsList) {
+            if (slot >= 45) break; // Máximo 45 items (9 slots reservados para botones)
+            
+            String materialName = (String) itemMap.get("material");
+            int amount = itemMap.containsKey("amount") ? (int) itemMap.get("amount") : 1;
+            double chance = itemMap.containsKey("chance") ? ((Number) itemMap.get("chance")).doubleValue() : 100.0;
+            
+            try {
+                Material material = Material.valueOf(materialName);
+                ItemStack item = new ItemStack(material, amount);
+                
+                // Aplicar nombre personalizado si existe
+                if (itemMap.containsKey("name")) {
+                    ItemMeta meta = item.getItemMeta();
+                    if (meta != null) {
+                        meta.setDisplayName((String) itemMap.get("name"));
+                        item.setItemMeta(meta);
+                    }
+                }
+                
+                // Añadir lore con información de probabilidad y mensaje de ayuda
+                ItemMeta meta = item.getItemMeta();
+                if (meta != null) {
+                    List<String> lore = new ArrayList<>();
+                    lore.add("§eProbabilidad: §f" + chance + "%");
+                    lore.add("§7Haz clic para configurar la probabilidad");
+                    
+                    // Añadir lore personalizado si existe
+                    if (itemMap.containsKey("lore") && itemMap.get("lore") instanceof List) {
+                        List<?> customLore = (List<?>) itemMap.get("lore");
+                        for (Object line : customLore) {
+                            if (line instanceof String) {
+                                lore.add((String) line);
+                            }
+                        }
+                    }
+                    
+                    meta.setLore(lore);
+                    item.setItemMeta(meta);
+                }
+                
+                inventory.setItem(slot, item);
+                slot++;
+            } catch (IllegalArgumentException e) {
+                plugin.getLogger().warning("Material inválido en la configuración: " + materialName);
+            }
+        }
+        
+        // Botón para volver al menú de edición de items
+        ItemStack backButton = createGuiItem(Material.ARROW, "§7§lVolver", 
+                "§7Volver al menú de edición de items");
+        inventory.setItem(49, backButton);
+        
+        // Decoración
+        ItemStack decorItem = createGuiItem(Material.BLACK_STAINED_GLASS_PANE, " ");
+        for (int i = 45; i < 54; i++) {
+            if (i != 49) { // No reemplazar el botón de volver
+                inventory.setItem(i, decorItem);
+            }
+        }
+        
+        player.openInventory(inventory);
+    }
+    
+    /**
      * Ordena los items del cofre por probabilidad (de mayor a menor)
      * @param player Jugador que está editando el cofre
      */
@@ -481,6 +793,7 @@ public class LootChestEditor implements Listener {
         }
         
         String title = event.getView().getTitle();
+        String chestName = playerEditing.get(playerId);
         
         // Menú principal
         if (title.startsWith(MAIN_MENU_TITLE)) {
@@ -514,8 +827,12 @@ public class LootChestEditor implements Listener {
                 
                 if (event.getRawSlot() == 45) { // Botón de volver
                     openMainMenu(player);
+                } else if (event.getRawSlot() == 47) { // Botón de añadir comando como item
+                    openCommandItemMenu(player);
                 } else if (event.getRawSlot() == 49) { // Botón de guardar
                     saveItemsFromInventory(player, event.getInventory());
+                } else if (event.getRawSlot() == 51) { // Botón de panel de probabilidades
+                    openProbabilitiesPanel(player);
                 } else if (event.getRawSlot() == 52) { // Botón de configurar probabilidad
                     // Verificar si hay algún item seleccionado
                     if (event.getCurrentItem() != null && event.getCurrentItem().getType() != Material.AIR) {
@@ -566,6 +883,21 @@ public class LootChestEditor implements Listener {
             }
             // Permitir interacción con los slots de items (0-44)
             else {
+                // Verificar si se hizo clic en un item de comando para editarlo
+                ItemStack clickedItem = event.getCurrentItem();
+                if (clickedItem != null && clickedItem.getType() == Material.COMMAND_BLOCK) {
+                    ItemMeta meta = clickedItem.getItemMeta();
+                    if (meta != null && meta.hasLore() && meta.getLore() != null) {
+                        List<String> lore = meta.getLore();
+                        for (String line : lore) {
+                            if (line.startsWith("§7Comando: §f")) {
+                                event.setCancelled(true);
+                                openCommandItemEditMenu(player, clickedItem, event.getRawSlot());
+                                break;
+                            }
+                        }
+                    }
+                }
                 // No cancelar el evento para permitir colocar/mover items en estos slots
             }
         }
@@ -573,16 +905,153 @@ public class LootChestEditor implements Listener {
         else if (title.startsWith(CONFIG_MENU_TITLE)) {
             event.setCancelled(true); // Cancelar el evento para evitar mover items
             
-            if (event.getRawSlot() == 13) { // Item de cooldown
+            if (event.getRawSlot() == 11) { // Item de cooldown
                 // Aquí se implementaría la lógica para modificar el cooldown
                 // Por simplicidad, solo mostraremos un mensaje
                 player.sendMessage("§ePara cambiar el cooldown, usa el comando:");
                 player.sendMessage("§e/vloot cooldown <nombre_cofre> <segundos>");
+            } else if (event.getRawSlot() == 15) { // Item de comando
+                openCommandMenu(player);
             } else if (event.getRawSlot() == 18) { // Botón de volver
                 openMainMenu(player);
             } else if (event.getRawSlot() == 26) { // Botón de guardar
                 player.sendMessage("§aConfiguración guardada.");
                 openMainMenu(player);
+            }
+        }
+        // Menú de configuración de comando como item
+        else if (title.startsWith(COMMAND_ITEM_MENU_TITLE) || title.startsWith(COMMAND_ITEM_EDIT_TITLE)) {
+            event.setCancelled(true); // Cancelar el evento para evitar mover items
+            
+            boolean isEditMode = title.startsWith(COMMAND_ITEM_EDIT_TITLE);
+            int slot = selectedSlot.getOrDefault(playerId, 0);
+            
+            if (event.getRawSlot() == 13 && !isEditMode) { // Configurar comando (solo en modo creación)
+                // Solicitar al jugador que ingrese el comando en el chat
+                player.closeInventory();
+                player.sendMessage("§dEscribe el comando que deseas configurar (o 'cancelar' para cancelar):");
+                
+                // Aquí se podría implementar un listener para capturar el mensaje del jugador
+                // Por simplicidad, se usará un item de comando predefinido
+                ItemStack commandItem = createGuiItem(Material.COMMAND_BLOCK, "§d§lComando", 
+                        "§7Comando: §fgive %player_name% diamond 1",
+                        "§eProbabilidad: §f100%",
+                        "",
+                        "§7Haz clic para editar");
+                
+                // Abrir el menú de edición con el comando predefinido
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    openCommandItemEditMenu(player, commandItem, 0);
+                }, 1L);
+            } else if (event.getRawSlot() == 11 && isEditMode) { // Editar comando existente
+                // Solicitar al jugador que ingrese el nuevo comando en el chat
+                player.closeInventory();
+                player.sendMessage("§dEscribe el nuevo comando (o 'cancelar' para cancelar):");
+                
+                // Aquí se podría implementar un listener para capturar el mensaje del jugador
+                // Por simplicidad, se reabrirá el mismo menú
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    ItemStack commandItem = event.getInventory().getItem(4);
+                    if (commandItem != null) {
+                        openCommandItemEditMenu(player, commandItem, slot);
+                    } else {
+                        openItemsMenu(player);
+                    }
+                }, 60L); // Dar tiempo para escribir
+            } else if (event.getRawSlot() == 15) { // Configurar probabilidad
+                ItemStack commandItem = isEditMode ? event.getInventory().getItem(4) : createGuiItem(Material.COMMAND_BLOCK, "§d§lComando", 
+                        "§7Comando: §fgive %player_name% diamond 1",
+                        "§eProbabilidad: §f100%",
+                        "",
+                        "§7Haz clic para editar");
+                
+                if (commandItem != null) {
+                    openChanceMenu(player, commandItem);
+                }
+            } else if (event.getRawSlot() == 18) { // Botón de volver
+                openItemsMenu(player);
+            } else if (event.getRawSlot() == 26) { // Guardar comando como item
+                if (isEditMode) {
+                    // Actualizar el comando existente en el inventario de items
+                    ItemStack commandItem = event.getInventory().getItem(4);
+                    if (commandItem != null) {
+                        // Buscar el inventario de edición de items
+                        Inventory itemsInventory = null;
+                        for (Player p : Bukkit.getOnlinePlayers()) {
+                            if (p.getUniqueId().equals(playerId) && p.getOpenInventory() != null) {
+                                Inventory inv = p.getOpenInventory().getTopInventory();
+                                String invTitle = p.getOpenInventory().getTitle();
+                                if (invTitle != null && invTitle.startsWith(ITEMS_MENU_TITLE)) {
+                                    itemsInventory = inv;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (itemsInventory != null) {
+                            itemsInventory.setItem(slot, commandItem);
+                            player.sendMessage("§aComando actualizado correctamente.");
+                        }
+                    }
+                    openItemsMenu(player);
+                } else {
+                    // Crear un nuevo item de comando y añadirlo al inventario de items
+                    ItemStack commandItem = createGuiItem(Material.COMMAND_BLOCK, "§d§lComando", 
+                            "§7Comando: §fgive %player_name% diamond 1",
+                            "§eProbabilidad: §f100%",
+                            "",
+                            "§7Haz clic para editar");
+                    
+                    // Buscar el primer slot vacío en el inventario de items
+                    Inventory itemsInventory = null;
+                    for (Player p : Bukkit.getOnlinePlayers()) {
+                        if (p.getUniqueId().equals(playerId) && p.getOpenInventory() != null) {
+                            Inventory inv = p.getOpenInventory().getTopInventory();
+                            String invTitle = p.getOpenInventory().getTitle();
+                            if (invTitle != null && invTitle.startsWith(ITEMS_MENU_TITLE)) {
+                                itemsInventory = inv;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (itemsInventory != null) {
+                        int emptySlot = -1;
+                        for (int i = 0; i < 45; i++) {
+                            if (itemsInventory.getItem(i) == null || itemsInventory.getItem(i).getType() == Material.AIR) {
+                                emptySlot = i;
+                                break;
+                            }
+                        }
+                        
+                        if (emptySlot != -1) {
+                            itemsInventory.setItem(emptySlot, commandItem);
+                            player.sendMessage("§aComando añadido correctamente.");
+                        } else {
+                            player.sendMessage("§cNo hay espacio disponible para añadir el comando.");
+                        }
+                    }
+                    openItemsMenu(player);
+                }
+            }
+        }
+        // Panel de probabilidades
+        else if (title.startsWith(PROBABILITIES_PANEL_TITLE)) {
+            event.setCancelled(true); // Cancelar el evento para evitar mover items
+            
+            // Verificar si se hizo clic en un item (slots 0-44)
+            if (event.getRawSlot() >= 0 && event.getRawSlot() < 45) {
+                ItemStack clickedItem = event.getCurrentItem();
+                if (clickedItem != null && clickedItem.getType() != Material.AIR) {
+                    // Abrir menú de configuración de probabilidad para este item
+                    openChanceMenu(player, clickedItem.clone());
+                    // Guardar el slot seleccionado para actualizar después
+                    selectedSlot.put(player.getUniqueId(), event.getRawSlot());
+                }
+            }
+            // Verificar si se hizo clic en el botón de volver
+            else if (event.getRawSlot() == 49) {
+                openItemsMenu(player);
             }
         }
         // Menú de configuración de probabilidad
@@ -600,7 +1069,9 @@ public class LootChestEditor implements Listener {
                 if (p.getUniqueId().equals(playerId) && p.getOpenInventory() != null) {
                     Inventory inv = p.getOpenInventory().getTopInventory();
                     String invTitle = p.getOpenInventory().getTitle();
-                    if (invTitle != null && invTitle.startsWith(ITEMS_MENU_TITLE)) {
+                    if (invTitle != null && (invTitle.startsWith(ITEMS_MENU_TITLE) || 
+                            invTitle.startsWith(COMMAND_ITEM_MENU_TITLE) || 
+                            invTitle.startsWith(COMMAND_ITEM_EDIT_TITLE))) {
                         itemsInventory = inv;
                         break;
                     }
@@ -620,61 +1091,110 @@ public class LootChestEditor implements Listener {
                 return;
             }
             
-            // Extraer probabilidad actual del lore
-            ItemMeta meta = selectedItem.getItemMeta();
-            if (meta != null && meta.hasLore() && meta.getLore() != null) {
-                List<String> lore = meta.getLore();
-                if (!lore.isEmpty() && lore.get(0).startsWith("§eProbabilidad: §f")) {
-                    String chanceStr = lore.get(0).replace("§eProbabilidad: §f", "").replace("%", "");
-                    try {
-                        currentChance = Double.parseDouble(chanceStr);
-                    } catch (NumberFormatException e) {
-                        plugin.getLogger().warning("Error al parsear probabilidad: " + chanceStr);
+            // Obtener la probabilidad actual del mapa o extraerla del lore si no existe
+            UUID playerUUID = player.getUniqueId();
+            if (!currentChanceByPlayer.containsKey(playerUUID)) {
+                // Extraer probabilidad inicial del lore si no está en el mapa
+                ItemMeta meta = selectedItem.getItemMeta();
+                if (meta != null && meta.hasLore() && meta.getLore() != null) {
+                    List<String> lore = meta.getLore();
+                    if (!lore.isEmpty() && lore.get(0).startsWith("§eProbabilidad: §f")) {
+                        String chanceStr = lore.get(0).replace("§eProbabilidad: §f", "").replace("%", "");
+                        try {
+                            currentChance = Double.parseDouble(chanceStr);
+                            currentChanceByPlayer.put(playerUUID, currentChance);
+                        } catch (NumberFormatException e) {
+                            plugin.getLogger().warning("Error al parsear probabilidad: " + chanceStr);
+                        }
                     }
                 }
+            } else {
+                // Usar la probabilidad almacenada en el mapa
+                currentChance = currentChanceByPlayer.get(playerUUID);
             }
             
             // Manejar clics en los botones
             if (event.getRawSlot() == 11) { // -10%
                 currentChance = Math.max(0.1, currentChance - 10);
+                currentChanceByPlayer.put(playerUUID, currentChance);
                 updateChanceDisplay(event.getInventory(), currentChance);
             } else if (event.getRawSlot() == 12) { // -5%
                 currentChance = Math.max(0.1, currentChance - 5);
+                currentChanceByPlayer.put(playerUUID, currentChance);
                 updateChanceDisplay(event.getInventory(), currentChance);
             } else if (event.getRawSlot() == 13) { // -1%
                 currentChance = Math.max(0.1, currentChance - 1);
+                currentChanceByPlayer.put(playerUUID, currentChance);
                 updateChanceDisplay(event.getInventory(), currentChance);
             } else if (event.getRawSlot() == 15) { // +1%
                 currentChance = Math.min(100, currentChance + 1);
+                currentChanceByPlayer.put(playerUUID, currentChance);
                 updateChanceDisplay(event.getInventory(), currentChance);
             } else if (event.getRawSlot() == 16) { // +5%
                 currentChance = Math.min(100, currentChance + 5);
+                currentChanceByPlayer.put(playerUUID, currentChance);
                 updateChanceDisplay(event.getInventory(), currentChance);
             } else if (event.getRawSlot() == 17) { // +10%
                 currentChance = Math.min(100, currentChance + 10);
+                currentChanceByPlayer.put(playerUUID, currentChance);
                 updateChanceDisplay(event.getInventory(), currentChance);
             } else if (event.getRawSlot() == 22) { // Confirmar
                 // Actualizar la probabilidad en el item
-                if (selectedItem != null && meta != null) {
-                    List<String> lore = meta.hasLore() && meta.getLore() != null ? meta.getLore() : new ArrayList<>();
+                if (selectedItem != null) {
+                    ItemMeta meta = selectedItem.getItemMeta();
+                    if (meta != null) {
+                        List<String> lore = meta.hasLore() && meta.getLore() != null ? meta.getLore() : new ArrayList<>();
                     
-                    if (lore.isEmpty()) {
-                        lore.add("§eProbabilidad: §f" + currentChance + "%");
-                    } else if (lore.get(0).startsWith("§eProbabilidad: §f")) {
-                        lore.set(0, "§eProbabilidad: §f" + currentChance + "%");
-                    } else {
-                        lore.add(0, "§eProbabilidad: §f" + currentChance + "%");
+                        // Verificar si es un item de comando
+                        boolean isCommandItem = false;
+                        for (String line : lore) {
+                            if (line.startsWith("§7Comando: §f")) {
+                                isCommandItem = true;
+                                break;
+                            }
+                        }
+                        
+                        if (isCommandItem) {
+                            // Actualizar la probabilidad en el item de comando
+                            boolean foundProbability = false;
+                            for (int i = 0; i < lore.size(); i++) {
+                                if (lore.get(i).startsWith("§eProbabilidad: §f")) {
+                                    lore.set(i, "§eProbabilidad: §f" + currentChance + "%");
+                                    foundProbability = true;
+                                    break;
+                                }
+                            }
+                            
+                            if (!foundProbability) {
+                                // Si no existe la línea de probabilidad, añadirla después del comando
+                                for (int i = 0; i < lore.size(); i++) {
+                                    if (lore.get(i).startsWith("§7Comando: §f")) {
+                                        lore.add(i + 1, "§eProbabilidad: §f" + currentChance + "%");
+                                        break;
+                                    }
+                                }
+                            }
+                        } else {
+                            // Item normal
+                            if (lore.isEmpty()) {
+                                lore.add("§eProbabilidad: §f" + currentChance + "%");
+                            } else if (lore.get(0).startsWith("§eProbabilidad: §f")) {
+                                lore.set(0, "§eProbabilidad: §f" + currentChance + "%");
+                            } else {
+                                lore.add(0, "§eProbabilidad: §f" + currentChance + "%");
+                            }
+                        }
+                        
+                        meta.setLore(lore);
+                        selectedItem.setItemMeta(meta);
+                        
+                        // Actualizar el item en el inventario de edición
+                        if (itemsInventory != null) {
+                            itemsInventory.setItem(slot, selectedItem);
+                        }
+                        
+                        player.sendMessage("§aProbabilidad actualizada a " + currentChance + "%");
                     }
-                    
-                    meta.setLore(lore);
-                    selectedItem.setItemMeta(meta);
-                    
-                    // Actualizar el item en el inventario de edición
-                    if (itemsInventory != null) {
-                        itemsInventory.setItem(slot, selectedItem);
-                    }
-                    
-                    player.sendMessage("§aProbabilidad actualizada a " + currentChance + "%");
                 }
                 
                 // Volver al menú de edición de items
@@ -784,6 +1304,60 @@ public class LootChestEditor implements Listener {
                 openPreviewMenu(player);
             } else if (event.getRawSlot() == 53) { // Volver
                 openMainMenu(player);
+            }
+        }
+        // Menú de configuración de comando
+        else if (title.startsWith(COMMAND_MENU_TITLE)) {
+            event.setCancelled(true); // Cancelar el evento para evitar mover items
+            
+            if (event.getRawSlot() == 15) { // Botón para editar comando
+                // Solicitar al jugador que ingrese el comando en el chat
+                player.closeInventory();
+                player.sendMessage("§eEscribe el comando que deseas configurar en el chat.");
+                player.sendMessage("§7Puedes usar §f%player_name% §7para referirte al jugador que abre el cofre.");
+                player.sendMessage("§7Ejemplo: §fgive %player_name% diamond 1");
+                player.sendMessage("§7Escribe §fcancelar §7para cancelar.");
+                
+                // Programar tarea para escuchar el próximo mensaje del jugador
+                Bukkit.getPluginManager().registerEvents(new Listener() {
+                    @EventHandler
+                    public void onPlayerChat(org.bukkit.event.player.AsyncPlayerChatEvent chatEvent) {
+                        if (chatEvent.getPlayer().getUniqueId().equals(playerId)) {
+                            chatEvent.setCancelled(true);
+                            String message = chatEvent.getMessage();
+                            
+                            // Desregistrar este listener temporal
+                            org.bukkit.event.HandlerList.unregisterAll(this);
+                            
+                            // Procesar el comando en el hilo principal
+                            Bukkit.getScheduler().runTask(plugin, () -> {
+                                if (message.equalsIgnoreCase("cancelar")) {
+                                    player.sendMessage("§cConfiguración de comando cancelada.");
+                                    openCommandMenu(player);
+                                    return;
+                                }
+                                
+                                // Guardar el comando en la configuración
+                                plugin.getLootChestsConfig().set("chests." + chestName + ".command", message);
+                                try {
+                                    plugin.getLootChestsConfig().save(plugin.getDataFolder() + "/lootchests.yml");
+                                    player.sendMessage("§aComando configurado correctamente: §f" + message);
+                                } catch (Exception e) {
+                                    player.sendMessage("§cError al guardar el comando.");
+                                    plugin.getLogger().severe("Error al guardar lootchests.yml: " + e.getMessage());
+                                }
+                                
+                                // Volver al menú de comandos
+                                openCommandMenu(player);
+                            });
+                        }
+                    }
+                }, plugin);
+            } else if (event.getRawSlot() == 18) { // Botón para volver
+                openConfigMenu(player);
+            } else if (event.getRawSlot() == 26) { // Botón para guardar
+                // El comando se guarda al editarlo, así que solo volvemos al menú de configuración
+                openConfigMenu(player);
             }
         }
     }
@@ -965,7 +1539,8 @@ public class LootChestEditor implements Listener {
                 player.sendMessage("§aHas salido del editor de cofres de loot.");
             } else if ((mode == EditorMode.ENCHANT_EDIT && title.startsWith(ENCHANT_MENU_TITLE)) ||
                       (mode == EditorMode.CHANCE_EDIT && title.startsWith(CHANCE_MENU_TITLE)) ||
-                      (mode == EditorMode.PREVIEW_LOOT && title.startsWith(PREVIEW_MENU_TITLE))) {
+                      (mode == EditorMode.PREVIEW_LOOT && title.startsWith(PREVIEW_MENU_TITLE)) ||
+                      (mode == EditorMode.COMMAND_EDIT && title.startsWith(COMMAND_MENU_TITLE))) {
                 // Volver al menú de edición de items al cerrar estos menús
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     if (playerEditing.containsKey(playerId)) {

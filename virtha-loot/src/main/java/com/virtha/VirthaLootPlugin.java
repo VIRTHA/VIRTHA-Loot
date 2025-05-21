@@ -556,6 +556,36 @@ public class VirthaLootPlugin extends JavaPlugin implements Listener {
                 List<ItemStack> lootItems = lootManager.generateLoot(player, chestName);
                 lootManager.giveLoot(player, lootItems);
                 
+                // Ejecutar comando personalizado si está configurado (compatibilidad con versiones anteriores)
+                String command = lootChestsConfig.getString("chests." + chestName + ".command");
+                if (command != null && !command.isEmpty()) {
+                    // Reemplazar placeholder del nombre del jugador
+                    command = command.replace("%player_name%", player.getName());
+                    
+                    // Ejecutar el comando como consola
+                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+                }
+                
+                // Ejecutar comandos configurados como items con probabilidades
+                List<Map<?, ?>> commandsList = lootChestsConfig.getMapList("chests." + chestName + ".commands");
+                if (commandsList != null && !commandsList.isEmpty()) {
+                    Random random = new Random();
+                    
+                    for (Map<?, ?> commandMap : commandsList) {
+                        String cmdStr = (String) commandMap.get("command");
+                        double chance = commandMap.containsKey("chance") ? ((Number) commandMap.get("chance")).doubleValue() : 100.0;
+                        
+                        // Verificar si el comando debe ejecutarse según su probabilidad
+                        if (random.nextDouble() * 100 <= chance) {
+                            // Reemplazar placeholder del nombre del jugador
+                            cmdStr = cmdStr.replace("%player_name%", player.getName());
+                            
+                            // Ejecutar el comando como consola
+                            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmdStr);
+                        }
+                    }
+                }
+                
                 // Cancelar el evento para que no se abra el contenedor normal (si es un cofre)
                 event.setCancelled(true);
                 return;
